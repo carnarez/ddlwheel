@@ -3,7 +3,7 @@
 Usage
 -----
 ```shell
-$ python ddltree.py [SCRIPT.sql [SCRIPT.sql [...]]]
+$ python sql.py [SCRIPT.sql [SCRIPT.sql [...]]]
 ```
 """
 
@@ -367,8 +367,7 @@ def through_ast(ast: dict[str, typing.Any]) -> dict[str, dict[str, dict[str, str
     Returns
     -------
     : dict[str, dict[str, dict[str, str]]]
-        Dictionary of schemas, table/views (including emporary objects) and columns
-        (including aliases).
+        Dictionary of schemas, tables/views (including temporary objects) and columns.
     """
     # nested json ast to list of feature objects
     l = _flatten_nested_json(ast)
