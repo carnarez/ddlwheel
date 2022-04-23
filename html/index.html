@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+
+    <!-- metatags -->
+    <title>Dependency Wheel</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🥝</text></svg>">
+
+    <!-- styling and color scheme -->
+    <link href="style.css" rel="stylesheet">
+
+    <!-- theme toggler -->
+    <script>
+
+      function setTheme(name) {
+        localStorage.setItem("theme", name);
+        document.documentElement.className = name;
+      }
+
+      function toggleTheme() {
+        if (localStorage.getItem("theme") === "light") {
+          setTheme("dark");
+        } else if (localStorage.getItem("theme") === "dark") {
+          setTheme("dimmed");
+        } else {
+          setTheme("light");
+        }
+      }
+
+      if (
+        localStorage.getItem("theme") === "dark" ||
+        (
+          !("theme" in localStorage) &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches
+        )
+      ) {
+        setTheme("dark");
+      } else if (localStorage.getItem("theme") === "dimmed") {
+        setTheme("dimmed");
+      } else {
+        setTheme("light");
+      }
+
+    </script>
+
+  </head>
+
+  <body>
+
+    <!-- buttons -->
+    <nav>
+      <ul id="suggestions"></ul>
+      <input autocomplete="off" id="filter" placeholder="filter" type="text">
+      <a href="https://github.com/carnarez/ddlwheel">what?</a>
+      <a class="theme-toggle" href="" onclick="toggleTheme();">theme</a>
+    </nav>
+
+    <!-- dependency wheel -->
+    <svg id="wheel"></svg>
+    <script src="script.js" type="module"></script>
+
+  </body>
+
+</html>

@@ -1,27 +1,26 @@
 # docker flags
-dkflags=--rm \
+dkflags=--env-file .env \
+        --name ddlwheel \
+        --rm \
         --tty \
-		--user "$$(id -u)":"$$(id -g)" \
+        --user "$$(id -u)":"$$(id -g)" \
         --volume /etc/group:/etc/group:ro \
         --volume /etc/passwd:/etc/passwd:ro \
         --volume /etc/shadow:/etc/shadow:ro \
-        --volume "$(PWD)/ddltree":/usr/src \
-        --volume "$(PWD)/samples":/usr/local/samples \
+        --volume "$(PWD)/ddlwheel":/usr/src \
+        --volume "$(PWD)/html":/var/www \
         --workdir /usr/src
 
 # interactive flags
-itflags=--entrypoint /bin/bash --interactive
+itflags=--entrypoint /bin/bash \
+        --interactive
 
 build:
-	@docker build --tag ddltree .
+	@docker build --tag ddlwheel .
 
-clean:
-	@rm -fr $$(find . -name __pycache__)
+serve: build
+	@docker run $(dkflags) --publish 8000:8000 ddlwheel \
+		python -m http.server --directory /var/www
 
-test: build
-	# @docker run $(dkflags) ddltree \
-	#     python -m pytest --color=yes --cov=ddltree --override-ini="cache_dir=/tmp/pytest" --verbose
-	@docker run $(dkflags) ddltree /bin/sh -c "python sql.py /usr/local/samples/fact_order_details.sql"
-
-dev: build
-	@docker run --name ddltree $(dkflags) $(itflags) ddltree
+env: build
+	@docker run $(dkflags) $(itflags) ddlwheel
