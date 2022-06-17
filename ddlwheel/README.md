@@ -243,8 +243,8 @@ Common tools, parsers and helpers.
 
 - [`clean_query()`](#utilsclean_query): Deep-cleaning of a SQL query.
 - [`family_tree()`](#utilsfamily_tree): Identify imports of an object.
-- [`fetch_children()`](#utilsfetch_children): Extract objects from
-  `ALTER`/`CREATE`/`INTO`/`REFRESH`/`UPDATE` statements. Skip
+- [`fetch_children()`](#utilsfetch_children): Extract objects from various SQL
+  statements. Skip temporary ones.
 - [`fetch_parents()`](#utilsfetch_parents): Extract objects from
   `FROM`/`JOIN`/`LOCATION` statements. Skip temporary ones.
 
@@ -290,8 +290,7 @@ Identify imports of an object.
 fetch_children(query: str, paths: list[str], database: str) -> list[dict[str, str]]:
 ```
 
-Extract objects from `ALTER`/`CREATE`/`INTO`/`REFRESH`/`UPDATE` statements. Skip
-temporary ones.
+Extract objects from various SQL statements. Skip temporary ones.
 
 **Parameters**
 
