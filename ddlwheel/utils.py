@@ -174,8 +174,7 @@ def _match(name: str, paths: list[str], database: str) -> str:
 
 
 def fetch_children(query: str, paths: list[str], database: str) -> list[dict[str, str]]:
-    r"""Extract objects from `ALTER`/`CREATE`/`INTO`/`REFRESH`/`UPDATE` statements. Skip
-    temporary ones.
+    r"""Extract objects from various SQL statements. Skip temporary ones.
 
     Parameters
     ----------
@@ -204,9 +203,7 @@ def fetch_children(query: str, paths: list[str], database: str) -> list[dict[str
     * `REFRESH MATERIALIZED VIEW\s+([^(].*?)\s`
     * `SELECT\s+.*\s+INTO\s+([^(].*?)\s`
     * `UPDATE\s+([^(].*?)\s`
-
-    This whole thing starts to need unittesting...
-    """  # noqa: D205 D400
+    """
     l: list[str] = []
     k: list[dict[str, str]] = []  # kids
 
