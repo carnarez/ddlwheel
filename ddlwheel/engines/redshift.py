@@ -8,7 +8,7 @@ from redshift_connector import Connection
 from redshift_connector import connect as redshift
 from redshift_connector.cursor import Cursor
 
-from ..utils import clean_query, fetch_parents
+from ..utils import clean_query, fetch_children, fetch_parents
 
 redshift_config = {
     "user": os.environ["REDSHIFT_USER"],
@@ -28,7 +28,7 @@ def fetch_objects(
     ----------
     cursor : redshift_connector.cursor.Cursor
         Cursor to use to run the query.
-    objects : dict[str, typing.Any]
+    objects : dict[str, str]
         Empty dictionary of objets encountered.
 
     Returns
@@ -45,8 +45,8 @@ def fetch_objects(
     select
         database_name,
         schema_name,
-        table_name,
-        table_type
+        table_name as object_name,
+        table_type as object_type
     from
         pg_catalog.svv_all_tables
     where
@@ -62,8 +62,8 @@ def fetch_objects(
     select
         database_name,
         schema_name,
-        table_name,
-        table_type
+        table_name as object_name,
+        table_type as object_type
     from
         pg_catalog.svv_all_tables
     where
@@ -87,6 +87,74 @@ def fetch_objects(
         objects[o] = {"name": n, "schema": s, "database": d, "type": t}
 
     return connections, objects
+
+
+def fetch_procs(
+    cursor: Cursor, d: str, procs: dict[str, typing.Any] = {}
+) -> dict[str, typing.Any]:
+    """List all stored procedures in all schemas of a `Redshift` database.
+
+    Parameters
+    ----------
+    cursor : redshift_connector.cursor.Cursor
+        Cursor to use to run the query.
+    d : str
+        Name of the database hosting the schema.
+    procs : dict[str, typing.Any]
+        Empty dictionary of procedures encountered.
+
+    Returns
+    -------
+    : dict[str, typing.Any]
+        Dictionary of procedures encountered, indexed by their respective long names.
+
+    Notes
+    -----
+    Performing the following query:
+    ```sql
+    select
+        'database' as database_name,
+        n.nspname as schema_name,
+        p.proname as object_name,
+        'PROCEDURE' as object_type
+    from
+        pg_catalog.pg_namespace n
+    join
+        pg_catalog.pg_proc p
+    on
+        pronamespace = n.oid
+    where
+        proowner = current_user_id
+        and proname <> 'get_result_set'
+    ```
+    """
+    # https://stackoverflow.com/a/62257907
+    q = f"""
+    select
+        '{d}' as database_name,
+        n.nspname as schema_name,
+        p.proname as object_name,
+        'PROCEDURE' as object_type
+    from
+        pg_catalog.pg_namespace n
+    join
+        pg_catalog.pg_proc p
+    on
+        pronamespace = n.oid
+    where
+        proowner = current_user_id
+        and proname <> 'get_result_set'
+    """
+
+    cursor.execute(q)
+
+    for d, s, n, t in cursor.fetchall():
+
+        # store the proc
+        o = f"{d}.{s}.{n}"
+        procs[o] = {"name": n, "schema": s, "database": d, "type": t}
+
+    return procs
 
 
 def fetch_ddl(cursor: Cursor, n: str, s: str, d: str, t: str) -> str:
@@ -121,12 +189,18 @@ def fetch_ddl(cursor: Cursor, n: str, s: str, d: str, t: str) -> str:
     try:
         cursor.execute(f"show {t} {s}.{n}")
         return cursor.fetchone()[0]
-    except:
+    except Exception:
         return "-- UNABLE TO FETCH"
 
 
-def fetch_columns(cursor: Cursor, n: str, s: str, d: str) -> list[dict[str, str]]:
-    """List all columns from an object.
+def fetch_columns(
+    cursor: Cursor, n: str, s: str, d: str, root_dir: str
+) -> list[dict[str, str]]:
+    """List all columns from an object and sample associated data.
+
+    If a `sample.sql` file is found in the given directory it is used to sample the
+    various columns of the object. Do NOT make it random! Otherwise each time this
+    script will run a new `README.md` will have to be committed.
 
     Parameters
     ----------
@@ -138,11 +212,14 @@ def fetch_columns(cursor: Cursor, n: str, s: str, d: str) -> list[dict[str, str]
         Name of the schema hosting the object.
     d : str
         Name of the database hosting the schema.
+    root_dir : str
+        Directory in which to write content/fetch content from.
 
     Returns
     -------
     : list[dict[str, str]]
-        Dictionary describing the object columns (name and datatypes).
+        Dictionary describing the object columns (name, datatypes, samples if a
+        `sample.sql` is provided).
 
     Notes
     -----
@@ -177,13 +254,24 @@ def fetch_columns(cursor: Cursor, n: str, s: str, d: str) -> list[dict[str, str]
 
     try:
         cursor.execute(q)
-        return [{"name": n, "datatype": t} for n, t in cursor.fetchall()]
-    except:
-        return []
+        c = cursor.fetchall()
+    except Exception:
+        c = []
+
+    return [{"name": n_, "datatype": t_, "sample": s_} for n_, t_, s_ in c]
 
 
-def fetch_details() -> dict[str, typing.Any]:
-    """List all objects in all databases and fetch their respective DDLs and columns.
+def fetch_details(
+    root_dir: str = "./", write_dict: str = "objects.json"
+) -> dict[str, typing.Any]:
+    """List all objects in the database, fetch their DDLs and sample their data.
+
+    Parameters
+    ----------
+    root_dir : str
+        Directory to write content in/fetch content from.
+    write_dict : str
+        If provided, write the details JSON to that path.
 
     Returns
     -------
@@ -195,9 +283,18 @@ def fetch_details() -> dict[str, typing.Any]:
         with connection.cursor() as cursor:
             connections, objects = fetch_objects(cursor)
 
+    # fetching the list of all stored procedures *does* require a particular database
+    # the next few lines clobber existing objects in the database
+    for d in connections:
+        with connections[d].cursor() as cursor:
+            objects = fetch_procs(cursor, d, objects)
+
+    objects = dict(sorted(objects.items()))
     paths = list(objects.keys())
 
-    # loop over each object and fetch its ddl and columns
+    # loop over each object and fetch its ddl, columns an data samples, and extract
+    # parents from the former
+    N = len(objects)
     for i, o in enumerate(objects):
         n = objects[o]["name"]
         s = objects[o]["schema"]
@@ -206,14 +303,32 @@ def fetch_details() -> dict[str, typing.Any]:
 
         with connections[d].cursor() as cursor:
             l = fetch_ddl(cursor, n, s, d, t)
-            c = fetch_columns(cursor, n, s, d)
-            p = fetch_parents(clean_query(l), paths, d)  # clean the query on the way
+            q = clean_query(l)  # clean the query
+            m = f"{(i + 1)*100/N:.0f}% {d}.{s}.{n}"
 
-            objects[o].update({"ddl": l, "columns": c, "parents": p})
+            # parent details
+            p = fetch_parents(q, paths, d)
+
+            # column details
+            if t == "PROCEDURE":
+                c = None
+                k = fetch_children(q, paths, d)
+                m += f": {len(p)} parents and {len(k)} children fetched."
+            else:
+                c = fetch_columns(cursor, n, s, d, root_dir)
+                k = None
+                m += f": {len(c)} columns and {len(p)} parents fetched."
+
+            objects[o].update({"ddl": l, "columns": c, "parents": p, "children": k})
 
     # close all created connections
     for connection in connections.values():
         connection.close()
+
+    # write output
+    if write_dict is not None:
+        with open(write_dict, "w") as f:
+            f.write(json.dumps(objects))
 
     return objects
 

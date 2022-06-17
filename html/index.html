@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
 
     <!-- metatags -->
-    <title>Dependency Wheel</title>
+    <title>CDAP Dependency Graph</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🥝</text></svg>">
 
     <!-- styling and color scheme -->
@@ -52,10 +52,22 @@
   <body>
 
     <!-- buttons -->
-    <nav>
+    <nav id="left">
+      <ul id="checkboxes"></ul>
+    </nav>
+    <nav id="right">
       <ul id="suggestions"></ul>
-      <input autocomplete="off" id="filter" placeholder="filter" type="text">
-      <a href="https://github.com/carnarez/ddlwheel">what?</a>
+      <form id="form">
+        <input
+          autocomplete="off"
+          id="filter"
+          placeholder="filter on schema.object or database.schema.object"
+          type="text"
+        >
+        <input type="submit" hidden>
+        <input type="reset" value="&#10006;">
+      </form>
+      <a href="https://github.com/carnarez/ddlwheel/">what?</a>
       <a class="theme-toggle" href="" onclick="toggleTheme();">theme</a>
     </nav>
 

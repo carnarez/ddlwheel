@@ -29,6 +29,7 @@
 }
 
 * {
+  box-sizing: border-box;
   scrollbar-width: none;  /* firefox */
   -ms-overflow-style: none;  /* edge, ie 10+ */
 }
@@ -44,7 +45,7 @@ body {
 }
 
 body,
-input[type=text] {
+input {
   background-color: var(--background-color);
   color: var(--font-color);
   font-family: var(--font-family);
@@ -63,14 +64,41 @@ a:hover {
   text-decoration-color: var(--link-color);
 }
 
-input[type=text] {
+form {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+input {
+  background-color: var(--background-color);
   border-color: var(--font-color);
   border-radius: 5px;
   border-style: solid;
   border-width: 1px;
-  opacity: 0.5;
   outline: none;
-  padding: 7px;
+}
+
+input[type=reset] {
+  border-color: var(--link-color);
+  color: var(--link-color);
+  cursor: pointer;
+  display: none;
+  padding: 3px 10px 1px 10px;
+  position: absolute;
+  right: 10px;
+  top: -5px;
+}
+
+input[type=reset]:hover {
+  border-color: var(--font-color);
+  color: var(--font-color);
+}
+
+input[type=text] {
+  opacity: 0.5;
+  padding: 8px;
   width: 600px;
 }
 
@@ -88,36 +116,112 @@ input[type=text]:hover {
 nav {
   bottom: 20px;
   position: absolute;
-  right: 20px;
   text-align: left;
+}
+
+nav * {
+  transition: 0.5s;
 }
 
 nav > * {
   margin: 0 10px;
 }
 
-nav ul {
-  background-color: var(--background-color);
+nav > ul {
   list-style-type: none;
-  margin: 10px;
   opacity: 0.75;
   padding: 0;
-  width: 616px;
 }
 
-nav ul:active,
-nav ul:focus,
-nav ul:hover {
+nav > ul:active,
+nav > ul:focus,
+nav > ul:hover {
   opacity: 1;
 }
 
-nav ul > li {
+nav#left {
+  left: 20px;
+}
+
+nav#left > ul > li {
+  margin: 10px 0 0 0;
+  white-space: nowrap;
+}
+
+nav#left > ul > li > label {
+  display: inline-block;
+  height: 18px;
+  position: relative;
+  width: 36px;
+}
+
+nav#left > ul > li > label > input[type=checkbox] {
+  display: none;
+}
+
+nav#left > ul > li > label > .label {
+  cursor: pointer;
+  margin: 0 0 0 50px;
+}
+
+nav#left > ul > li > label > .slider {
+  border-color: var(--font-color);
+  border-radius: 36px;
+  border-style: solid;
+  border-width: 1px;
+  bottom: 0;
+  cursor: pointer;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+nav#left > ul > li > label > .slider:before {
+  background-color: var(--font-color);
+  border-radius: 50%;
+  bottom: 2px;
+  content: "";
+  height: 12px;
+  left: 2px;
+  position: absolute;
+  transition: 0.25s;
+  width: 12px;
+}
+
+nav#left > ul > li > label > input[type=checkbox]:checked + .slider {
+  border-color: var(--link-color);
+}
+
+nav#left > ul > li > label > input[type=checkbox]:checked + .slider:before {
+  background-color: var(--link-color);
+  transform: translateX(18px);
+}
+
+nav#right {
+  right: 20px;
+}
+
+nav#right > ul {
+  background-color: var(--background-color);
+  margin: 10px;
+  opacity: 0.75;
+  width: 616px;
+}
+
+nav#right > ul:active,
+nav#right > ul:focus,
+nav#right > ul:hover {
+  opacity: 1;
+}
+
+nav#right > ul > li {
   padding: 10px;
 }
 
-nav ul > li:active,
-nav ul > li:focus,
-nav ul > li:hover {
+nav#right > ul > li:active,
+nav#right > ul > li:focus,
+nav#right > ul > li:hover {
   color: var(--link-color);
   cursor: pointer;
 }
