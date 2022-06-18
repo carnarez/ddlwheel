@@ -222,7 +222,7 @@ d3.json("data.json").then(rawData => {
     }
 
     // this function is called when the mouse hovers an object and will highlight
-    // the latter, but also the immediate parents/childrens of the object
+    // the latter, but also the immediate parents/children of the object
     function overed(e, d) {
       d3.select(this)
         .attr("font-size", "normal")
@@ -373,7 +373,7 @@ d3.json("data.json").then(rawData => {
           ob = d.name.split(".")[2];
 
       // short/long names -> long name
-      for (let i of [`${db}.${ob}`, `${db}.${sc}.${ob}`]) {
+      for (let i of [ob, `${sc}.${ob}`, `${db}.${sc}.${ob}`]) {
         if (!Object.keys(index).includes(i)) index[i] = d.name;
       }
 
