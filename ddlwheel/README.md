@@ -43,10 +43,9 @@ In particular, three functions are expected in each engine module:
 - [`fetch_procs()`](#enginesredshiftfetch_procs): List all stored procedures in all
   schemas of a `Redshift` database.
 - [`fetch_ddl()`](#enginesredshiftfetch_ddl): Fetch the DDL of an object.
-- [`fetch_columns()`](#enginesredshiftfetch_columns): List all columns from an object
-  and sample associated data.
-- [`fetch_details()`](#enginesredshiftfetch_details): List all objects in the database,
-  fetch their DDLs and sample their data.
+- [`fetch_columns()`](#enginesredshiftfetch_columns): List all columns from an object.
+- [`fetch_details()`](#enginesredshiftfetch_details): List all objects in the database
+  and fetch lower level information.
 
 ## Functions
 
@@ -124,7 +123,7 @@ select
     'database' as database_name,
     n.nspname as schema_name,
     p.proname as object_name,
-    'PROCEDURE' as object_type
+    'STORED PROCEDURE' as object_type
 from
     pg_catalog.pg_namespace n
 join
@@ -168,20 +167,10 @@ show external table schema.table
 ### `engines.redshift.fetch_columns`
 
 ```python
-fetch_columns(
-    cursor: Cursor,
-    n: str,
-    s: str,
-    d: str,
-    root_dir: str,
-) -> list[dict[str, str]]:
+fetch_columns(cursor: Cursor, n: str, s: str, d: str) -> list[dict[str, str]]:
 ```
 
-List all columns from an object and sample associated data.
-
-If a `sample.sql` file is found in the given directory it is used to sample the various
-columns of the object. Do NOT make it random! Otherwise each time this script will run a
-new `README.md` will have to be committed.
+List all columns from an object.
 
 **Parameters**
 
@@ -189,12 +178,11 @@ new `README.md` will have to be committed.
 - `n` \[`str`\]: Name of the object.
 - `s` \[`str`\]: Name of the schema hosting the object.
 - `d` \[`str`\]: Name of the database hosting the schema.
-- `root_dir` \[`str`\]: Directory in which to write content/fetch content from.
 
 **Returns**
 
-- \[`list[dict[str, str]]`\]: Dictionary describing the object columns (name, datatypes,
-  samples if a `sample.sql` is provided).
+- \[`list[dict[str, str]]`\]: Dictionary describing the object columns (name,
+  datatypes).
 
 **Notes**
 
@@ -217,17 +205,13 @@ order by
 ### `engines.redshift.fetch_details`
 
 ```python
-fetch_details(
-    root_dir: str = "./",
-    write_dict: str = "objects.json",
-) -> dict[str, typing.Any]:
+fetch_details(write_dict: str = "objects.json") -> dict[str, typing.Any]:
 ```
 
-List all objects in the database, fetch their DDLs and sample their data.
+List all objects in the database and fetch lower level information.
 
 **Parameters**
 
-- `root_dir` \[`str`\]: Directory to write content in/fetch content from.
 - `write_dict` \[`str`\]: If provided, write the details JSON to that path.
 
 **Returns**
@@ -281,8 +265,8 @@ Identify imports of an object.
 
 **Returns**
 
-- \[`list[dict[str, list[str] | str]]`\]: List of dictionary of name and parents/chilren
-  lists.
+- \[`list[dict[str, list[str] | str]]`\]: List of dictionary of name and
+  parents/children lists.
 
 ### `utils.fetch_children`
 
