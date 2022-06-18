@@ -7,6 +7,7 @@ import typing
 from redshift_connector import Connection
 from redshift_connector import connect as redshift
 from redshift_connector.cursor import Cursor
+from tqdm import tqdm
 
 from ..utils import clean_query, fetch_children, fetch_parents
 
@@ -116,7 +117,7 @@ def fetch_procs(
         'database' as database_name,
         n.nspname as schema_name,
         p.proname as object_name,
-        'PROCEDURE' as object_type
+        'STORED PROCEDURE' as object_type
     from
         pg_catalog.pg_namespace n
     join
@@ -134,7 +135,7 @@ def fetch_procs(
         '{d}' as database_name,
         n.nspname as schema_name,
         p.proname as object_name,
-        'PROCEDURE' as object_type
+        'STORED PROCEDURE' as object_type
     from
         pg_catalog.pg_namespace n
     join
@@ -194,13 +195,9 @@ def fetch_ddl(cursor: Cursor, n: str, s: str, d: str, t: str) -> str:
 
 
 def fetch_columns(
-    cursor: Cursor, n: str, s: str, d: str, root_dir: str
+    cursor: Cursor, n: str, s: str, d: str
 ) -> list[dict[str, str]]:
-    """List all columns from an object and sample associated data.
-
-    If a `sample.sql` file is found in the given directory it is used to sample the
-    various columns of the object. Do NOT make it random! Otherwise each time this
-    script will run a new `README.md` will have to be committed.
+    """List all columns from an object.
 
     Parameters
     ----------
@@ -212,14 +209,11 @@ def fetch_columns(
         Name of the schema hosting the object.
     d : str
         Name of the database hosting the schema.
-    root_dir : str
-        Directory in which to write content/fetch content from.
 
     Returns
     -------
     : list[dict[str, str]]
-        Dictionary describing the object columns (name, datatypes, samples if a
-        `sample.sql` is provided).
+        Dictionary describing the object columns (name, datatypes).
 
     Notes
     -----
@@ -258,18 +252,16 @@ def fetch_columns(
     except Exception:
         c = []
 
-    return [{"name": n_, "datatype": t_, "sample": s_} for n_, t_, s_ in c]
+    return [{"name": n, "datatype": t} for n, t in c]
 
 
 def fetch_details(
-    root_dir: str = "./", write_dict: str = "objects.json"
+    write_dict: str = "objects.json"
 ) -> dict[str, typing.Any]:
-    """List all objects in the database, fetch their DDLs and sample their data.
+    """List all objects in the database and fetch lower level information.
 
     Parameters
     ----------
-    root_dir : str
-        Directory to write content in/fetch content from.
     write_dict : str
         If provided, write the details JSON to that path.
 
@@ -292,10 +284,10 @@ def fetch_details(
     objects = dict(sorted(objects.items()))
     paths = list(objects.keys())
 
-    # loop over each object and fetch its ddl, columns an data samples, and extract
-    # parents from the former
+    # loop over each object and fetch its ddl and columns details, and extract parents
+    # and children from the former
     N = len(objects)
-    for i, o in enumerate(objects):
+    for i, o in enumerate(tqdm(objects, desc="Fetch object details")):
         n = objects[o]["name"]
         s = objects[o]["schema"]
         d = objects[o]["database"]
@@ -304,20 +296,17 @@ def fetch_details(
         with connections[d].cursor() as cursor:
             l = fetch_ddl(cursor, n, s, d, t)
             q = clean_query(l)  # clean the query
-            m = f"{(i + 1)*100/N:.0f}% {d}.{s}.{n}"
 
             # parent details
             p = fetch_parents(q, paths, d)
 
             # column details
-            if t == "PROCEDURE":
+            if t == "STORED PROCEDURE":
                 c = None
                 k = fetch_children(q, paths, d)
-                m += f": {len(p)} parents and {len(k)} children fetched."
             else:
-                c = fetch_columns(cursor, n, s, d, root_dir)
+                c = fetch_columns(cursor, n, s, d)
                 k = None
-                m += f": {len(c)} columns and {len(p)} parents fetched."
 
             objects[o].update({"ddl": l, "columns": c, "parents": p, "children": k})
 

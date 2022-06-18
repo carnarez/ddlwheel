@@ -73,7 +73,7 @@ def family_tree(objects: dict[str, typing.Any]) -> list[dict[str, list[str] | st
     Returns
     -------
     : list[dict[str, list[str] | str]]
-        List of dictionary of name and parents/chilren lists.
+        List of dictionary of name and parents/children lists.
     """
     tree: list[dict[str, list[str] | str]] = []
 
@@ -122,8 +122,6 @@ def family_tree(objects: dict[str, typing.Any]) -> list[dict[str, list[str] | st
             t = "BUCKET"
         else:
             t = objects[o]["type"]
-            if t == "PROCEDURE":
-                t = "STORED PROCEDURE"
             if t == "VIEW" and re.match(
                 r"create\s+materialized\s+view", objects[o]["ddl"].lower()
             ):
