@@ -320,7 +320,3 @@ def fetch_details(
             f.write(json.dumps(objects))
 
     return objects
-
-
-if __name__ == "__main__":
-    print(json.dumps(fetch_details()))

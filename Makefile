@@ -1,6 +1,5 @@
 # docker flags
-dkflags=--env-file .env \
-        --name ddlwheel \
+dkflags=--name ddlwheel \
         --rm \
         --tty \
         --user "$$(id -u)":"$$(id -g)" \
@@ -18,9 +17,9 @@ itflags=--entrypoint /bin/bash \
 build:
 	@docker build --tag ddlwheel .
 
+env: build
+	@docker run $(dkflags) $(itflags) ddlwheel
+
 serve: build
 	@docker run $(dkflags) --publish 8000:8000 ddlwheel \
 		python -m http.server --directory /var/www
-
-env: build
-	@docker run $(dkflags) $(itflags) ddlwheel

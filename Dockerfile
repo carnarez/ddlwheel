@@ -6,4 +6,4 @@ RUN pip install --upgrade pip \
                                tqdm
 
 COPY ddlwheel/ /usr/src/
-COPY html/ /var/www
+COPY www/ /var/www
