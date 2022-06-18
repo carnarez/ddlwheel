@@ -84,8 +84,7 @@ def fetch_objects(
             connections[d] = redshift(**redshift_config)
 
         # save the object
-        o = f"{d}.{s}.{n}"
-        objects[o] = {"name": n, "schema": s, "database": d, "type": t}
+        objects[f"{d}.{s}.{n}"] = {"name": n, "schema": s, "database": d, "type": t}
 
     return connections, objects
 
@@ -117,7 +116,7 @@ def fetch_procs(
         'database' as database_name,
         n.nspname as schema_name,
         p.proname as object_name,
-        'STORED PROCEDURE' as object_type
+        'PROCEDURE' as object_type
     from
         pg_catalog.pg_namespace n
     join
@@ -135,7 +134,7 @@ def fetch_procs(
         '{d}' as database_name,
         n.nspname as schema_name,
         p.proname as object_name,
-        'STORED PROCEDURE' as object_type
+        'PROCEDURE' as object_type
     from
         pg_catalog.pg_namespace n
     join
@@ -152,8 +151,7 @@ def fetch_procs(
     for d, s, n, t in cursor.fetchall():
 
         # store the proc
-        o = f"{d}.{s}.{n}"
-        procs[o] = {"name": n, "schema": s, "database": d, "type": t}
+        procs[f"{d}.{s}.{n}"] = {"name": n, "schema": s, "database": d, "type": t}
 
     return procs
 
@@ -172,8 +170,8 @@ def fetch_ddl(cursor: Cursor, n: str, s: str, d: str, t: str) -> str:
     d : str
         Name of the database hosting the schema.
     t : str
-        One of `external table`, `table` or `view` (last one accounting for materialized
-        views as well).
+        One of `external table`, `procedure`, `table` or `view` (last one accounting for
+        materialized views as well).
 
     Returns
     -------
@@ -188,7 +186,7 @@ def fetch_ddl(cursor: Cursor, n: str, s: str, d: str, t: str) -> str:
     ```
     """
     try:
-        cursor.execute(f"show {t} {s}.{n}")
+        cursor.execute(f"show {t} {d}.{s}.{n}")
         return cursor.fetchone()[0]
     except Exception:
         return "-- UNABLE TO FETCH"
@@ -301,12 +299,12 @@ def fetch_details(
             p = fetch_parents(q, paths, d)
 
             # column details
-            if t == "STORED PROCEDURE":
-                c = None
+            if t == "PROCEDURE":
+                c = []
                 k = fetch_children(q, paths, d)
             else:
                 c = fetch_columns(cursor, n, s, d)
-                k = None
+                k = []
 
             objects[o].update({"ddl": l, "columns": c, "parents": p, "children": k})
 

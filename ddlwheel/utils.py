@@ -85,30 +85,28 @@ def family_tree(objects: dict[str, typing.Any]) -> list[dict[str, list[str] | st
     for oi in objects.keys():
 
         # parents
-        if objects[oi]["parents"] is not None:
-            for p in objects[oi]["parents"]:
-                if (oj := _cname(p["path"], p["name"])) != "":
-                    incoming[oi].append(oj)
+        for p in objects[oi]["parents"]:
+            if (oj := _cname(p["path"], p["name"])) != "":
+                incoming[oi].append(oj)
 
-                    try:
-                        outgoing[oj].append(oi)
-                    except KeyError:
-                        outgoing[oj] = [oi]
+                try:
+                    outgoing[oj].append(oi)
+                except KeyError:
+                    outgoing[oj] = [oi]
 
-                        # fix for objects *outside* the database itself
-                        incoming[oj] = []
-                        external.append(oj)
+                    # fix for objects *outside* the database itself
+                    incoming[oj] = []
+                    external.append(oj)
 
         # children
-        if objects[oi]["children"] is not None:
-            for k in objects[oi]["children"]:
-                if (oj := _cname(k["path"], k["name"])) != "":
-                    outgoing[oi].append(oj)
+        for k in objects[oi]["children"]:
+            if (oj := _cname(k["path"], k["name"])) != "":
+                outgoing[oi].append(oj)
 
-                    try:
-                        incoming[oj].append(oi)
-                    except KeyError:
-                        incoming[oj] = [oi]
+                try:
+                    incoming[oj].append(oi)
+                except KeyError:
+                    incoming[oj] = [oi]
 
     for o in list(objects.keys()) + external:
         d = objects.get(o, {}).get("database", "s3")
@@ -122,6 +120,8 @@ def family_tree(objects: dict[str, typing.Any]) -> list[dict[str, list[str] | st
             t = "BUCKET"
         else:
             t = objects[o]["type"]
+            if t == "PROCEDURE":
+                t = "STORED PROCEDURE"
             if t == "VIEW" and re.match(
                 r"create\s+materialized\s+view", objects[o]["ddl"].lower()
             ):
