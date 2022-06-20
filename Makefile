@@ -1,25 +1,33 @@
-# docker flags
-dkflags=--name ddlwheel \
-        --rm \
-        --tty \
-        --user "$$(id -u)":"$$(id -g)" \
-        --volume /etc/group:/etc/group:ro \
-        --volume /etc/passwd:/etc/passwd:ro \
-        --volume /etc/shadow:/etc/shadow:ro \
-        --volume "$(PWD)/ddlwheel":/usr/src \
-        --volume "$(PWD)/html":/var/www \
-        --workdir /usr/src
-
-# interactive flags
-itflags=--entrypoint /bin/bash \
-        --interactive
+FLAGS=--name ddlwheel \
+     --rm \
+     --tty \
+     --user "$$(id -u)":"$$(id -g)" \
+     --volume /etc/group:/etc/group:ro \
+     --volume /etc/passwd:/etc/passwd:ro \
+     --volume /etc/shadow:/etc/shadow:ro \
+     --volume "$(PWD)/ddlwheel":/usr/src \
+     --volume "$(PWD)/html":/var/www \
+     --workdir /usr/src
 
 build:
 	@docker build --tag ddlwheel .
 
+clean:
+	@rm -fr $$(find . -name __pycache__)
+
 env: build
-	@docker run $(dkflags) $(itflags) ddlwheel
+	@docker run $(FLAGS) --entrypoint /bin/bash --interactive ddlwheel
 
 serve: build
-	@docker run $(dkflags) --publish 8000:8000 ddlwheel \
+	@docker run $(FLAGS) --publish 8000:8000 ddlwheel \
 		python -m http.server --directory /var/www
+
+test: build
+	@docker run $(FLAGS) --env COLUMNS=$(COLUMNS) ddlwheel \
+	    python -m pytest --capture=no \
+	                     --color=yes \
+	                     --cov=ddlwheel \
+	                     --cov-report term-missing \
+	                     --override-ini="cache_dir=/tmp/pytest" \
+	                     --verbose \
+	                     --verbose
