@@ -84,14 +84,14 @@ def fetch_children(query: str, paths: list[str], database: str) -> list[dict[str
     Notes
     -----
     Regexes:
-    * `ALTER MATERIALIZED VIEW\s+([^(].*?)\s`
-    * `ALTER TABLE\s+([^(].*?)\s`
-    * `CREATE\s+.*\s+MATERIALIZED VIEW\s+([^(].*?)\s`
-    * `CREATE\s+.*\s+TABLE IF NOT EXISTS\s+([^(].*?)\s`
-    * `CREATE\s+.*\s+TABLE\s+([^(].*?)\s`
-    * `CREATE\s+.*\s+VIEW\s+([^(].*?)\s`
-    * `INSERT INTO\s+([^(].*?)\s`
-    * `REFRESH MATERIALIZED VIEW\s+([^(].*?)\s`
+    * `ALTER\s+MATERIALIZED\s+VIEW\s+([^(].*?)\s`
+    * `ALTER\s+TABLE\s+([^(].*?)\s`
+    * `CREATE\s+[A-Za-z]*\s+MATERIALIZED\s+VIEW\s+([^(].*?)\s`
+    * `CREATE\s+[A-Za-z]*\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([^(].*?)\s`
+    * `CREATE\s+[A-Za-z]*\s+TABLE\s+([^(].*?)\s`
+    * `CREATE\s+[A-Za-z]*\s+VIEW\s+([^(].*?)\s`
+    * `INSERT\s+INTO\s+([^(].*?)\s`
+    * `REFRESH\s+MATERIALIZED\s+VIEW\s+([^(].*?)\s`
     * `SELECT\s+.*\s+INTO\s+([^(].*?)\s`
     * `UPDATE\s+([^(].*?)\s`
     """
@@ -100,17 +100,17 @@ def fetch_children(query: str, paths: list[str], database: str) -> list[dict[str
 
     for r in (
         # alter materialized view or table
-        r"ALTER MATERIALIZED VIEW\s+([^(].*?)\s",
-        r"ALTER TABLE\s+([^(].*?)\s",
+        r"ALTER\s+MATERIALIZED\s+VIEW\s+([^(].*?)\s",
+        r"ALTER\s+TABLE\s+([^(].*?)\s",
         # create materialized view, table or view
-        r"CREATE\s+.*\s+MATERIALIZED VIEW\s+([^(].*?)\s",
-        r"CREATE\s+.*\s+TABLE IF NOT EXISTS\s+([^(].*?)\s",
-        r"CREATE\s+.*\s+TABLE\s+([^(].*?)\s",
-        r"CREATE\s+.*\s+VIEW\s+([^(].*?)\s",
+        r"CREATE\s+[A-Za-z]*\s+MATERIALIZED\s+VIEW\s+([^(].*?)\s",
+        r"CREATE\s+[A-Za-z]*\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([^(].*?)\s",
+        r"CREATE\s+[A-Za-z]*\s+TABLE\s+([^(].*?)\s",
+        r"CREATE\s+[A-Za-z]*\s+VIEW\s+([^(].*?)\s",
         # insert into
-        r"INSERT INTO\s+([^(].*?)\s",
+        r"INSERT\s+INTO\s+([^(].*?)\s",
         # refresh
-        r"REFRESH MATERIALIZED VIEW\s+([^(].*?)\s",
+        r"REFRESH\s+MATERIALIZED\s+VIEW\s+([^(].*?)\s",
         # select into; no support for extra keywords!
         r"SELECT\s+.*\s+INTO\s+([^(].*?)\s",
         # update
