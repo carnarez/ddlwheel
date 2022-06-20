@@ -1,21 +1,37 @@
-"""Extract and visualise a dependency wheel of SQL objects.
+# flake8: noqa
+# isort: skip_file
+
+"""Extract information of SQL objects from a database.
 
 Usage
 -----
 Below an example for `Redshift`:
+
 ```python
-from common import fetch_family
-from engines.redshift import fetch_details
+from ddlwheel import Redshift
 
-objects = fetch_details()
-tree = fetch_family(objects)
+r = Redshift(
+    user=os.environ["REDSHIFT_USER"],
+    password=os.environ["REDSHIFT_PASSWORD"],
+    host=os.environ["REDSHIFT_HOST"],
+    port=int(os.environ.get("REDSHIFT_PORT", 5439)),
+    database=os.environ["REDSHIFT_DB"],
+)
 
-with open("objects.json", "w") as f:
-    f.write(json.dumps(objects))  # to reuse at a later date
+r.fetch()
+r.dump_objects("objects.json")
+```
 
-with open("family_tree.json", "w") as f:
-    f.write(json.dumps(tree))  # format expected by the d3 script
+To generate the format expected by the `d3.js` script process the data further:
+
+```
+from wheel import family_tree
+
+with open("data.json", "w") as f:
+    f.write(json.dumps(family_tree(r.objects)))
 ```
 """
+
+from .engines.redshift import Redshift
 
 __version__: str = "0.0.1"

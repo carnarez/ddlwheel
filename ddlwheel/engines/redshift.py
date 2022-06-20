@@ -1,320 +1,303 @@
 """`Redshift` facilities."""
 
-import json
-import os
 import typing
 
-from redshift_connector import Connection
-from redshift_connector import connect as redshift
+from redshift_connector import Connection, connect
 from redshift_connector.cursor import Cursor
 from tqdm import tqdm
 
-from ..utils import clean_query, fetch_children, fetch_parents
-
-redshift_config = {
-    "user": os.environ["REDSHIFT_USER"],
-    "password": os.environ["REDSHIFT_PASSWORD"],
-    "host": os.environ["REDSHIFT_HOST"],
-    "port": int(os.environ.get("REDSHIFT_PORT", 5439)),
-    "database": os.environ["REDSHIFT_DB"],
-}
+from ..parsers.common import clean_query, fetch_children, fetch_parents
+from . import Engine
 
 
-def fetch_objects(
-    cursor: Cursor, objects: dict[str, typing.Any] = {}
-) -> tuple[dict[str, Connection], dict[str, typing.Any]]:
-    """List all objects in all `Redshift` databases.
+class Redshift(Engine):
+    """`Redshift` client object."""
 
-    Parameters
-    ----------
-    cursor : redshift_connector.cursor.Cursor
-        Cursor to use to run the query.
-    objects : dict[str, str]
-        Empty dictionary of objets encountered.
+    def __init__(self, **connection_kwargs):
+        """Set up the connection parameters and class objects.
 
-    Returns
-    -------
-    : dict[str, redshift_connector.connection.Connection]
-        Dictionary of connection object for each database encountered.
-    : dict[str, typing.Any]
-        Dictionary of objects encountered, indexed by their respective long names.
+        Parameters
+        ----------
+        connection_kwargs : dict[str, int | str]
+            Connection parameters to connect to the `Redshift` database.
 
-    Notes
-    -----
-    Performing the following query:
-    ```sql
-    select
-        database_name,
-        schema_name,
-        table_name as object_name,
-        table_type as object_type
-    from
-        pg_catalog.svv_all_tables
-    where
-        schema_name not in ('information_schema', 'pg_catalog')
-        and substring(table_name, 1, 8) <> 'mv_tbl__'
-    order by
-        database_name, schema_name, table_name
-    ```
-    """
-    connections: dict[str, Connection] = {}
+        Attributes
+        ----------
+        config : dict[str, int | str]
+            Connection parameters to connect to the `Redshift` database.
+        connections : dict[str, redshift_connector.Connection]
+            Dictionary of connection objects for each database encountered.
+        objects : dict[str, typing.Any]
+            Dictionary of objects encountered, indexed by their respective long names.
+        """
+        self.config = {
+            "user": connection_kwargs.get("user"),
+            "password": connection_kwargs.get("password"),
+            "host": connection_kwargs.get("host"),
+            "port": connection_kwargs.get("port", 5439),
+            "database": connection_kwargs.get("database"),
+        }
 
-    q = """
-    select
-        database_name,
-        schema_name,
-        table_name as object_name,
-        table_type as object_type
-    from
-        pg_catalog.svv_all_tables
-    where
-        schema_name not in ('information_schema', 'pg_catalog')
-        and substring(table_name, 1, 8) <> 'mv_tbl__'
-    order by
-        database_name, schema_name, table_name
-    """
+        self.connections: dict[str, Connection] = {}
+        self.objects: dict[str, typing.Any] = {}
 
-    cursor.execute(q)
+    @staticmethod
+    def fetch_columns(cursor: Cursor, n: str, s: str, d: str) -> list[dict[str, str]]:
+        """List all columns from an object.
 
-    for d, s, n, t in cursor.fetchall():
+        Parameters
+        ----------
+        cursor : redshift_connector.cursor.Cursor
+            Cursor to use to run the query.
+        n : str
+            Name of the object.
+        s : str
+            Name of the schema hosting the object.
+        d : str
+            Name of the database hosting the schema.
 
-        # create a new connection associated with that database
-        if d not in connections:
-            redshift_config["database"] = d
-            connections[d] = redshift(**redshift_config)
+        Returns
+        -------
+        : list[dict[str, str]]
+            Dictionary describing the object columns (name, datatypes).
 
-        # save the object
-        objects[f"{d}.{s}.{n}"] = {"name": n, "schema": s, "database": d, "type": t}
+        Notes
+        -----
+        Performing the following [example] query:
+        ```sql
+        select
+            column_name,
+            data_type
+        from
+            pg_catalog.svv_all_columns
+        where
+            database_name = 'database'
+            and schema_name = 'schema'
+            and table_name = 'table'
+        order by
+            ordinal_position
+        ```
+        """
+        q = f"""
+        select
+            column_name,
+            data_type
+        from
+            pg_catalog.svv_all_columns
+        where
+            database_name = '{d}'
+            and schema_name = '{s}'
+            and table_name = '{n}'
+        order by
+            ordinal_position
+        """
 
-    return connections, objects
+        try:
+            cursor.execute(q)
+            c = cursor.fetchall()
+        except Exception:
+            c = []
 
+        return [{"name": n, "datatype": t} for n, t in c]
 
-def fetch_procs(
-    cursor: Cursor, d: str, procs: dict[str, typing.Any] = {}
-) -> dict[str, typing.Any]:
-    """List all stored procedures in all schemas of a `Redshift` database.
+    @staticmethod
+    def fetch_ddl(cursor: Cursor, n: str, s: str, d: str, t: str) -> str:
+        """Fetch the DDL of an object.
 
-    Parameters
-    ----------
-    cursor : redshift_connector.cursor.Cursor
-        Cursor to use to run the query.
-    d : str
-        Name of the database hosting the schema.
-    procs : dict[str, typing.Any]
-        Empty dictionary of procedures encountered.
+        Parameters
+        ----------
+        cursor : redshift_connector.cursor.Cursor
+            Cursor to use to run the query.
+        n : str
+            Name of the object.
+        s : str
+            Name of the schema hosting the object.
+        d : str
+            Name of the database hosting the schema.
+        t : str
+            One of `external table`, `procedure`, `table` or `view` (last one accounting
+            for materialized views as well).
 
-    Returns
-    -------
-    : dict[str, typing.Any]
-        Dictionary of procedures encountered, indexed by their respective long names.
+        Returns
+        -------
+        : str
+            DDL of the object.
 
-    Notes
-    -----
-    Performing the following query:
-    ```sql
-    select
-        'database' as database_name,
-        n.nspname as schema_name,
-        p.proname as object_name,
-        'PROCEDURE' as object_type
-    from
-        pg_catalog.pg_namespace n
-    join
-        pg_catalog.pg_proc p
-    on
-        pronamespace = n.oid
-    where
-        proowner = current_user_id
-        and proname <> 'get_result_set'
-    ```
-    """
-    # https://stackoverflow.com/a/62257907
-    q = f"""
-    select
-        '{d}' as database_name,
-        n.nspname as schema_name,
-        p.proname as object_name,
-        'PROCEDURE' as object_type
-    from
-        pg_catalog.pg_namespace n
-    join
-        pg_catalog.pg_proc p
-    on
-        pronamespace = n.oid
-    where
-        proowner = current_user_id
-        and proname <> 'get_result_set'
-    """
+        Notes
+        -----
+        Performing the following [example] query:
+        ```sql
+        show external table schema.table
+        ```
+        """
+        try:
+            cursor.execute(f"show {t} {d}.{s}.{n}")
+            return cursor.fetchone()[0]
+        except Exception:
+            return "-- UNABLE TO FETCH"
 
-    cursor.execute(q)
+    def fetch(self):
+        """List all objects in all databases and fetch all information for each."""
+        # fetching the list of all objects does not require a particular database
+        with connect(**self.config) as connection:
+            with connection.cursor() as cursor:
+                self.fetch_objects(cursor)
 
-    for d, s, n, t in cursor.fetchall():
+        # fetching the list of all stored procedures *does* require a particular
+        # database the next few lines clobber existing objects in the database
+        for d in self.connections:
+            with self.connections[d].cursor() as cursor:
+                self.fetch_procs(cursor, d)
 
-        # store the proc
-        procs[f"{d}.{s}.{n}"] = {"name": n, "schema": s, "database": d, "type": t}
+        self.objects = dict(sorted(self.objects.items()))
+        paths = list(self.objects.keys())
 
-    return procs
+        # loop over each object and fetch its ddl and columns details, and extract
+        # parents and children from the former
+        for i, o in enumerate(tqdm(self.objects, desc="Fetch object details")):
+            n = self.objects[o]["name"]
+            s = self.objects[o]["schema"]
+            d = self.objects[o]["database"]
+            t = self.objects[o]["type"]
 
+            with self.connections[d].cursor() as cursor:
+                f = self.fetch_ddl(cursor, n, s, d, t)
+                q = clean_query(f)  # clean the query
 
-def fetch_ddl(cursor: Cursor, n: str, s: str, d: str, t: str) -> str:
-    """Fetch the DDL of an object.
+                # parent details
+                p = fetch_parents(q, paths, d)
 
-    Parameters
-    ----------
-    cursor : redshift_connector.cursor.Cursor
-        Cursor to use to run the query.
-    n : str
-        Name of the object.
-    s : str
-        Name of the schema hosting the object.
-    d : str
-        Name of the database hosting the schema.
-    t : str
-        One of `external table`, `procedure`, `table` or `view` (last one accounting for
-        materialized views as well).
+                # column details
+                if t == "PROCEDURE":
+                    c = []
+                    k = fetch_children(q, paths, d)
+                else:
+                    c = self.fetch_columns(cursor, n, s, d)
+                    k = []
 
-    Returns
-    -------
-    : str
-        DDL of the object.
+                self.objects[o].update(
+                    {"ddl": f, "columns": c, "parents": p, "children": k}
+                )
 
-    Notes
-    -----
-    Performing the following [example] query:
-    ```sql
-    show external table schema.table
-    ```
-    """
-    try:
-        cursor.execute(f"show {t} {d}.{s}.{n}")
-        return cursor.fetchone()[0]
-    except Exception:
-        return "-- UNABLE TO FETCH"
+        # close all created connections
+        for connection in self.connections.values():
+            connection.close()
 
+    def fetch_objects(self, cursor: Cursor):
+        """List all objects in all `Redshift` databases.
 
-def fetch_columns(
-    cursor: Cursor, n: str, s: str, d: str
-) -> list[dict[str, str]]:
-    """List all columns from an object.
+        Parameters
+        ----------
+        cursor : redshift_connector.cursor.Cursor
+            Cursor to use to run the query.
 
-    Parameters
-    ----------
-    cursor : redshift_connector.cursor.Cursor
-        Cursor to use to run the query.
-    n : str
-        Name of the object.
-    s : str
-        Name of the schema hosting the object.
-    d : str
-        Name of the database hosting the schema.
+        Notes
+        -----
+        Performing the following query:
+        ```sql
+        select
+            database_name,
+            schema_name,
+            table_name as object_name,
+            table_type as object_type
+        from
+            pg_catalog.svv_all_tables
+        where
+            schema_name not in ('information_schema', 'pg_catalog')
+            and substring(table_name, 1, 8) <> 'mv_tbl__'
+        order by
+            database_name, schema_name, table_name
+        ```
+        """
+        q = """
+        select
+            database_name,
+            schema_name,
+            table_name as object_name,
+            table_type as object_type
+        from
+            pg_catalog.svv_all_tables
+        where
+            schema_name not in ('information_schema', 'pg_catalog')
+            and substring(table_name, 1, 8) <> 'mv_tbl__'
+        order by
+            database_name, schema_name, table_name
+        """
 
-    Returns
-    -------
-    : list[dict[str, str]]
-        Dictionary describing the object columns (name, datatypes).
-
-    Notes
-    -----
-    Performing the following [example] query:
-    ```sql
-    select
-        column_name,
-        data_type
-    from
-        pg_catalog.svv_all_columns
-    where
-        database_name = 'database'
-        and schema_name = 'schema'
-        and table_name = 'table'
-    order by
-        ordinal_position
-    ```
-    """
-    q = f"""
-    select
-        column_name,
-        data_type
-    from
-        pg_catalog.svv_all_columns
-    where
-        database_name = '{d}'
-        and schema_name = '{s}'
-        and table_name = '{n}'
-    order by
-        ordinal_position
-    """
-
-    try:
         cursor.execute(q)
-        c = cursor.fetchall()
-    except Exception:
-        c = []
 
-    return [{"name": n, "datatype": t} for n, t in c]
+        for d, s, n, t in cursor.fetchall():
 
+            # create a new connection associated with that database
+            if d not in self.connections:
+                config = self.config.copy()
+                config.update({"database": d})
+                self.connections[d] = connect(**config)
 
-def fetch_details(
-    write_dict: str = "objects.json"
-) -> dict[str, typing.Any]:
-    """List all objects in the database and fetch lower level information.
+            # save the object
+            self.objects[f"{d}.{s}.{n}"] = {
+                "name": n,
+                "schema": s,
+                "database": d,
+                "type": t,
+            }
 
-    Parameters
-    ----------
-    write_dict : str
-        If provided, write the details JSON to that path.
+    def fetch_procs(self, cursor: Cursor, d: str):
+        """List all stored procedures in all schemas of a `Redshift` database.
 
-    Returns
-    -------
-    : dict[str, typing.Any]
-        Dictionary of objects encountered, indexed by their respective long names.
-    """
-    # fetching the list of all objects does not require a particular database
-    with redshift(**redshift_config) as connection:
-        with connection.cursor() as cursor:
-            connections, objects = fetch_objects(cursor)
+        Parameters
+        ----------
+        cursor : redshift_connector.cursor.Cursor
+            Cursor to use to run the query.
+        d : str
+            Name of the database hosting the schema.
 
-    # fetching the list of all stored procedures *does* require a particular database
-    # the next few lines clobber existing objects in the database
-    for d in connections:
-        with connections[d].cursor() as cursor:
-            objects = fetch_procs(cursor, d, objects)
+        Notes
+        -----
+        Performing the following query:
+        ```sql
+        select
+            'database' as database_name,
+            n.nspname as schema_name,
+            p.proname as object_name,
+            'PROCEDURE' as object_type
+        from
+            pg_catalog.pg_namespace n
+        join
+            pg_catalog.pg_proc p
+        on
+            pronamespace = n.oid
+        where
+            proowner = current_user_id
+            and proname <> 'get_result_set'
+        ```
+        """
+        # https://stackoverflow.com/a/62257907
+        q = f"""
+        select
+            '{d}' as database_name,
+            n.nspname as schema_name,
+            p.proname as object_name,
+            'PROCEDURE' as object_type
+        from
+            pg_catalog.pg_namespace n
+        join
+            pg_catalog.pg_proc p
+        on
+            pronamespace = n.oid
+        where
+            proowner = current_user_id
+            and proname <> 'get_result_set'
+        """
 
-    objects = dict(sorted(objects.items()))
-    paths = list(objects.keys())
+        cursor.execute(q)
 
-    # loop over each object and fetch its ddl and columns details, and extract parents
-    # and children from the former
-    N = len(objects)
-    for i, o in enumerate(tqdm(objects, desc="Fetch object details")):
-        n = objects[o]["name"]
-        s = objects[o]["schema"]
-        d = objects[o]["database"]
-        t = objects[o]["type"]
+        for d, s, n, t in cursor.fetchall():
 
-        with connections[d].cursor() as cursor:
-            l = fetch_ddl(cursor, n, s, d, t)
-            q = clean_query(l)  # clean the query
-
-            # parent details
-            p = fetch_parents(q, paths, d)
-
-            # column details
-            if t == "PROCEDURE":
-                c = []
-                k = fetch_children(q, paths, d)
-            else:
-                c = fetch_columns(cursor, n, s, d)
-                k = []
-
-            objects[o].update({"ddl": l, "columns": c, "parents": p, "children": k})
-
-    # close all created connections
-    for connection in connections.values():
-        connection.close()
-
-    # write output
-    if write_dict is not None:
-        with open(write_dict, "w") as f:
-            f.write(json.dumps(objects))
-
-    return objects
+            # store the proc
+            self.objects[f"{d}.{s}.{n}"] = {
+                "name": n,
+                "schema": s,
+                "database": d,
+                "type": t,
+            }
