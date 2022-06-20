@@ -1,170 +1,211 @@
 # Module `__init__`
 
-Extract and visualise a dependency wheel of SQL objects.
+Extract information of SQL objects from a database.
 
 **Usage**
 
 Below an example for `Redshift`:
 
 ```python
-from common import fetch_family
-from engines.redshift import fetch_details
+from ddlwheel import Redshift
 
-objects = fetch_details()
-tree = fetch_family(objects)
+r = Redshift(
+    user=os.environ["REDSHIFT_USER"],
+    password=os.environ["REDSHIFT_PASSWORD"],
+    host=os.environ["REDSHIFT_HOST"],
+    port=int(os.environ.get("REDSHIFT_PORT", 5439)),
+    database=os.environ["REDSHIFT_DB"],
+)
 
-with open("objects.json", "w") as f:
-    f.write(json.dumps(objects))  # to reuse at a later date
+r.fetch()
+r.dump_objects("objects.json")
+```
 
-with open("family_tree.json", "w") as f:
-    f.write(json.dumps(tree))  # format expected by the d3 script
+To generate the format expected by the `d3.js` script process the data further:
+
+```
+from wheel import family_tree
+
+with open("data.json", "w") as f:
+    f.write(json.dumps(family_tree(r.objects)))
 ```
 
 # Module `engines`
 
-Database-flavoured utils and functions.
+Template object for flavoured clients; act as documentation.
 
-In particular, three functions are expected in each engine module:
+**Classes**
 
-- `fetch_objects()` listing all database objects to describe.
-- `fetch_ddl()` querying the definition of a single object (DDL) which will later be
-  parsed to extract direct parents.
-- `fetch_details()` which does all the work, that is, leverages the previous functions
-  to "fully" describe all objects in the database(s).
+- [`Engine`](#enginesengine): Metaclass documenting the necessary minimal
+  implementation.
 
-# Module `engines.redshift`
+## Classes
 
-`Redshift` facilities.
+### `engines.Engine`
 
-**Functions**
+Metaclass documenting the necessary minimal implementation.
 
-- [`fetch_objects()`](#enginesredshiftfetch_objects): List all objects in all `Redshift`
+**Methods**
+
+- [`fetch_ddl()`](#enginesenginefetch_ddl): Fetch the DDL of an object.
+- [`fetch_columns()`](#enginesenginefetch_columns): List all columns from an object.
+- [`fetch()`](#enginesenginefetch): List all objects in all databases and fetch all
+  information for each.
+- [`fetch_objects()`](#enginesenginefetch_objects): List all objects in all accessible
   databases.
-- [`fetch_procs()`](#enginesredshiftfetch_procs): List all stored procedures in all
-  schemas of a `Redshift` database.
-- [`fetch_ddl()`](#enginesredshiftfetch_ddl): Fetch the DDL of an object.
-- [`fetch_columns()`](#enginesredshiftfetch_columns): List all columns from an object.
-- [`fetch_details()`](#enginesredshiftfetch_details): List all objects in the database
-  and fetch lower level information.
+- [`dump_objects()`](#enginesenginedump_objects): Dump the `objects` dictionary in JSON
+  format to the given path.
 
-## Functions
-
-### `engines.redshift.fetch_objects`
+#### Constructor
 
 ```python
-fetch_objects(
-    cursor: Cursor,
-    objects: dict[str, typing.Any] = {},
-) -> tuple[dict[str, Connection], dict[str, typing.Any]]:
+Engine(**connection_kwargs)
 ```
 
-List all objects in all `Redshift` databases.
+Set up the connection parameters and class objects.
 
 **Parameters**
 
-- `cursor` \[`redshift_connector.cursor.Cursor`\]: Cursor to use to run the query.
-- `objects` \[`dict[str, str]`\]: Empty dictionary of objets encountered.
+- `connection_kwargs` \[`dict[str, int | str]`\]: Connection parameters to connect to
+  the given database.
 
-**Returns**
+**Attributes**
 
-- \[`dict[str, redshift_connector.connection.Connection]`\]: Dictionary of connection
-  object for each database encountered.
-- \[`dict[str, typing.Any]`\]: Dictionary of objects encountered, indexed by their
-  respective long names.
+- `config` \[`dict[str, int | str]`\]: Connection parameters to connect to the given
+  database.
+- `connections` \[`dict[str, object]`\]: Dictionary of connection objects (type specific
+  to the database client) for each database encountered.
+- `objects` \[`dict[str, typing.Any]`\]: Dictionary of objects encountered, indexed by
+  their respective long names.
 
-**Notes**
+#### Methods
 
-Performing the following query:
-
-```sql
-select
-    database_name,
-    schema_name,
-    table_name as object_name,
-    table_type as object_type
-from
-    pg_catalog.svv_all_tables
-where
-    schema_name not in ('information_schema', 'pg_catalog')
-    and substring(table_name, 1, 8) <> 'mv_tbl__'
-order by
-    database_name, schema_name, table_name
-```
-
-### `engines.redshift.fetch_procs`
+##### `engines.Engine.fetch_ddl`
 
 ```python
-fetch_procs(
-    cursor: Cursor,
-    d: str,
-    procs: dict[str, typing.Any] = {},
-) -> dict[str, typing.Any]:
-```
-
-List all stored procedures in all schemas of a `Redshift` database.
-
-**Parameters**
-
-- `cursor` \[`redshift_connector.cursor.Cursor`\]: Cursor to use to run the query.
-- `d` \[`str`\]: Name of the database hosting the schema.
-- `procs` \[`dict[str, typing.Any]`\]: Empty dictionary of procedures encountered.
-
-**Returns**
-
-- \[`dict[str, typing.Any]`\]: Dictionary of procedures encountered, indexed by their
-  respective long names.
-
-**Notes**
-
-Performing the following query:
-
-```sql
-select
-    'database' as database_name,
-    n.nspname as schema_name,
-    p.proname as object_name,
-    'STORED PROCEDURE' as object_type
-from
-    pg_catalog.pg_namespace n
-join
-    pg_catalog.pg_proc p
-on
-    pronamespace = n.oid
-where
-    proowner = current_user_id
-    and proname <> 'get_result_set'
-```
-
-### `engines.redshift.fetch_ddl`
-
-```python
-fetch_ddl(cursor: Cursor, n: str, s: str, d: str, t: str) -> str:
+fetch_ddl(cursor, *args, **kwargs) -> str:
 ```
 
 Fetch the DDL of an object.
 
 **Parameters**
 
-- `cursor` \[`redshift_connector.cursor.Cursor`\]: Cursor to use to run the query.
-- `n` \[`str`\]: Name of the object.
-- `s` \[`str`\]: Name of the schema hosting the object.
-- `d` \[`str`\]: Name of the database hosting the schema.
-- `t` \[`str`\]: One of `external table`, `table` or `view` (last one accounting for
-  materialized views as well).
+- `cursor`: Cursor (object type specific to the database client) to use to run the
+  query.
 
 **Returns**
 
 - \[`str`\]: DDL of the object.
 
-**Notes**
+**Decoration** via `@staticmethod`.
 
-Performing the following \[example\] query:
+##### `engines.Engine.fetch_columns`
 
-```sql
-show external table schema.table
+```python
+fetch_columns(cursor, *args, **kwargs) -> list[dict[str, str]]:
 ```
 
-### `engines.redshift.fetch_columns`
+List all columns from an object.
+
+**Parameters**
+
+- `cursor` \[`redshift_connector.cursor.Cursor`\]: Cursor (object type specific to the
+  database client) to use to run the query.
+
+**Returns**
+
+- \[`list[dict[str, str]]`\]: Dictionary describing the object columns (name,
+  datatypes).
+
+**Decoration** via `@staticmethod`.
+
+##### `engines.Engine.fetch`
+
+```python
+fetch():
+```
+
+List all objects in all databases and fetch all information for each.
+
+##### `engines.Engine.fetch_objects`
+
+```python
+fetch_objects(cursor):
+```
+
+List all objects in all accessible databases.
+
+This method should also generate connection objects (type specific to the database
+client) for each accessible database; stored in the `connections` dictionary.
+
+**Parameters**
+
+- `cursor`: Cursor (object type specific to the database client) to use to run the
+  query.
+
+##### `engines.Engine.dump_objects`
+
+```python
+dump_objects(path = "objects.json"):
+```
+
+Dump the `objects` dictionary in JSON format to the given path.
+
+**Parameters**
+
+- `path` \[`str`\]: Write the `objects` dictionary in JSON format to that path.
+
+# Module `engines.redshift`
+
+`Redshift` facilities.
+
+**Classes**
+
+- [`Redshift`](#enginesredshiftredshift): `Redshift` client object.
+
+## Classes
+
+### `engines.redshift.Redshift`
+
+`Redshift` client object.
+
+**Methods**
+
+- [`fetch_columns()`](#enginesredshiftredshiftfetch_columns): List all columns from an
+  object.
+- [`fetch_ddl()`](#enginesredshiftredshiftfetch_ddl): Fetch the DDL of an object.
+- [`fetch()`](#enginesredshiftredshiftfetch): List all objects in all databases and
+  fetch all information for each.
+- [`fetch_objects()`](#enginesredshiftredshiftfetch_objects): List all objects in all
+  `Redshift` databases.
+- [`fetch_procs()`](#enginesredshiftredshiftfetch_procs): List all stored procedures in
+  all schemas of a `Redshift` database.
+
+#### Constructor
+
+```python
+Redshift(**connection_kwargs)
+```
+
+Set up the connection parameters and class objects.
+
+**Parameters**
+
+- `connection_kwargs` \[`dict[str, int | str]`\]: Connection parameters to connect to
+  the `Redshift` database.
+
+**Attributes**
+
+- `config` \[`dict[str, int | str]`\]: Connection parameters to connect to the
+  `Redshift` database.
+- `connections` \[`dict[str, redshift_connector.Connection]`\]: Dictionary of connection
+  objects for each database encountered.
+- `objects` \[`dict[str, typing.Any]`\]: Dictionary of objects encountered, indexed by
+  their respective long names.
+
+#### Methods
+
+##### `engines.redshift.Redshift.fetch_columns`
 
 ```python
 fetch_columns(cursor: Cursor, n: str, s: str, d: str) -> list[dict[str, str]]:
@@ -202,39 +243,131 @@ order by
     ordinal_position
 ```
 
-### `engines.redshift.fetch_details`
+**Decoration** via `@staticmethod`.
+
+##### `engines.redshift.Redshift.fetch_ddl`
 
 ```python
-fetch_details(write_dict: str = "objects.json") -> dict[str, typing.Any]:
+fetch_ddl(cursor: Cursor, n: str, s: str, d: str, t: str) -> str:
 ```
 
-List all objects in the database and fetch lower level information.
+Fetch the DDL of an object.
 
 **Parameters**
 
-- `write_dict` \[`str`\]: If provided, write the details JSON to that path.
+- `cursor` \[`redshift_connector.cursor.Cursor`\]: Cursor to use to run the query.
+- `n` \[`str`\]: Name of the object.
+- `s` \[`str`\]: Name of the schema hosting the object.
+- `d` \[`str`\]: Name of the database hosting the schema.
+- `t` \[`str`\]: One of `external table`, `procedure`, `table` or `view` (last one
+  accounting for materialized views as well).
 
 **Returns**
 
-- \[`dict[str, typing.Any]`\]: Dictionary of objects encountered, indexed by their
-  respective long names.
+- \[`str`\]: DDL of the object.
 
-# Module `utils`
+**Notes**
+
+Performing the following \[example\] query:
+
+```sql
+show external table schema.table
+```
+
+**Decoration** via `@staticmethod`.
+
+##### `engines.redshift.Redshift.fetch`
+
+```python
+fetch():
+```
+
+List all objects in all databases and fetch all information for each.
+
+##### `engines.redshift.Redshift.fetch_objects`
+
+```python
+fetch_objects(cursor: Cursor):
+```
+
+List all objects in all `Redshift` databases.
+
+**Parameters**
+
+- `cursor` \[`redshift_connector.cursor.Cursor`\]: Cursor to use to run the query.
+
+**Notes**
+
+Performing the following query:
+
+```sql
+select
+    database_name,
+    schema_name,
+    table_name as object_name,
+    table_type as object_type
+from
+    pg_catalog.svv_all_tables
+where
+    schema_name not in ('information_schema', 'pg_catalog')
+    and substring(table_name, 1, 8) <> 'mv_tbl__'
+order by
+    database_name, schema_name, table_name
+```
+
+##### `engines.redshift.Redshift.fetch_procs`
+
+```python
+fetch_procs(cursor: Cursor, d: str):
+```
+
+List all stored procedures in all schemas of a `Redshift` database.
+
+**Parameters**
+
+- `cursor` \[`redshift_connector.cursor.Cursor`\]: Cursor to use to run the query.
+- `d` \[`str`\]: Name of the database hosting the schema.
+
+**Notes**
+
+Performing the following query:
+
+```sql
+select
+    'database' as database_name,
+    n.nspname as schema_name,
+    p.proname as object_name,
+    'PROCEDURE' as object_type
+from
+    pg_catalog.pg_namespace n
+join
+    pg_catalog.pg_proc p
+on
+    pronamespace = n.oid
+where
+    proowner = current_user_id
+    and proname <> 'get_result_set'
+```
+
+# Module `parsers`
+
+Entrypoint for a simplified SQL parser.
+
+# Module `parsers.common`
 
 Common tools, parsers and helpers.
 
 **Functions**
 
-- [`clean_query()`](#utilsclean_query): Deep-cleaning of a SQL query.
-- [`family_tree()`](#utilsfamily_tree): Identify imports of an object.
-- [`fetch_children()`](#utilsfetch_children): Extract objects from various SQL
+- [`clean_query()`](#parserscommonclean_query): Deep-cleaning of a SQL query.
+- [`fetch_children()`](#parserscommonfetch_children): Extract objects from various SQL
   statements. Skip temporary ones.
-- [`fetch_parents()`](#utilsfetch_parents): Extract objects from
+- [`fetch_parents()`](#parserscommonfetch_parents): Extract objects from
   `FROM`/`JOIN`/`LOCATION` statements. Skip temporary ones.
 
 ## Functions
 
-### `utils.clean_query`
+### `parsers.common.clean_query`
 
 ```python
 clean_query(query: str) -> str:
@@ -250,25 +383,7 @@ Deep-cleaning of a SQL query.
 
 - \[`str`\]: Cleaned up query.
 
-### `utils.family_tree`
-
-```python
-family_tree(objects: dict[str, typing.Any]) -> list[dict[str, list[str] | str]]:
-```
-
-Identify imports of an object.
-
-**Parameters**
-
-- `objects` \[`dict[str, typing.Any]`\]: Dictionary of objects encountered, indexed by
-  their respective long names.
-
-**Returns**
-
-- \[`list[dict[str, list[str] | str]]`\]: List of dictionary of name and
-  parents/children lists.
-
-### `utils.fetch_children`
+### `parsers.common.fetch_children`
 
 ```python
 fetch_children(query: str, paths: list[str], database: str) -> list[dict[str, str]]:
@@ -302,7 +417,7 @@ Regexes:
 - `SELECT\s+.*\s+INTO\s+([^(].*?)\s`
 - `UPDATE\s+([^(].*?)\s`
 
-### `utils.fetch_parents`
+### `parsers.common.fetch_parents`
 
 ```python
 fetch_parents(query: str, paths: list[str], database: str) -> list[dict[str, str]]:
@@ -328,3 +443,31 @@ Regexes:
 - `FROM\s+([^(].*?)[(\s;)]`
 - `JOIN\s+([^(].*?)[(\s)]`
 - `LOCATION\s+'(.*)'`
+
+# Module `wheel`
+
+Facilities to generate input for the wheel.
+
+**Functions**
+
+- [`family_tree()`](#wheelfamily_tree): Identify imports of an object.
+
+## Functions
+
+### `wheel.family_tree`
+
+```python
+family_tree(objects: dict[str, typing.Any]) -> list[dict[str, list[str] | str]]:
+```
+
+Identify imports of an object.
+
+**Parameters**
+
+- `objects` \[`dict[str, typing.Any]`\]: Dictionary of objects encountered, indexed by
+  their respective long names.
+
+**Returns**
+
+- \[`list[dict[str, list[str] | str]]`\]: List of dictionary of name and
+  parents/children lists.

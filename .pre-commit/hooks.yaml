@@ -1,0 +1,24 @@
+black:
+    cmd: black
+    flags:
+    check: --check
+flake8:
+    cmd: flake8
+    flags: --extend-ignore=E203 --max-doc-length=88 --max-line-length=88
+    check:
+isort:
+    cmd: isort
+    flags: --multi-line=3 --profile=black
+    check: --check
+mdformat:
+    cmd: mdformat
+    flags: --wrap=88
+    check: --check
+mypy:
+    cmd: mypy
+    flags: --cache-dir=/tmp/mypy_cache --install-types --no-color-output --non-interactive
+    check:
+pydocstyle:
+    cmd: pydocstyle
+    flags: --convention=numpy
+    check:
