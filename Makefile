@@ -6,7 +6,7 @@ FLAGS=--name ddlwheel \
      --volume /etc/passwd:/etc/passwd:ro \
      --volume /etc/shadow:/etc/shadow:ro \
      --volume "$(PWD)/ddlwheel":/usr/src \
-     --volume "$(PWD)/html":/var/www \
+     --volume "$(PWD)/www":/var/www \
      --workdir /usr/src
 
 build:

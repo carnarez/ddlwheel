@@ -24,7 +24,7 @@ r.dump_objects("objects.json")
 
 To generate the format expected by the `d3.js` script process the data further:
 
-```
+```python
 from wheel import family_tree
 
 with open("data.json", "w") as f:
